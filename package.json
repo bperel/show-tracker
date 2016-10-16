@@ -1,0 +1,9 @@
+{
+  "name": "hp-tracker",
+  "version": "0.0.1",
+  "dependencies": {
+    "casperjs": "1.1.*",
+    "moment": "2.15.*",
+    "moment-timezone-with-data-2010-2020": "0.4.*"
+  }
+}
