@@ -32,7 +32,7 @@ function scrape(integrationName) {
 				console.log("[Integration][" + integration.name + "] Scraping state : " + integration.getNextDaysPaginationMarker());
 
 				Array.prototype.forEach.call(dates, function (date) {
-					var dayElement = integration.getDayElement(getTimeZonedTime(date, integration.getTimeZone()));
+					var dayElement = integration.getDayElement(date);
 					if (dayElement) {
 						console.log("[Integration][" + integration.name + "] Day found : " + date);
 						timesAndPricesForIntegration.push(date);

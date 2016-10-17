@@ -1,12 +1,9 @@
 var integration =
 {
 	name: 'viagogo',
-	type: 'scraping',
-	getTimeZone: function() {
-		return 'Europe/London';
-	},
 	getDayElement: function(date) {
-		return document.querySelector('.js-day.day[id=\''+date.unix()+'\']');
+		var timezonedDate = getTimeZonedTime(date, 'Europe/London');
+		return document.querySelector('.js-day.day[id=\''+timezonedDate.unix()+'\']');
 	},
 	getShowElementsinDayElement: function(dayElement) {
 		return dayElement.querySelectorAll('.event.js-event');
@@ -38,7 +35,7 @@ var integration =
 		var allDays = document.querySelectorAll('.js-day.day');
 		var maxDay = null;
 		Array.prototype.forEach.call(allDays, function (day) {
-			var currentDay = moment.unix(day.getAttribute('id')).tz(integration.getTimeZone());
+			var currentDay = moment.unix(day.getAttribute('id')).tz('Europe/London');
 			if (!maxDay || maxDay.diff(currentDay) < 0) {
 				maxDay = currentDay;
 			}
