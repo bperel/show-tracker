@@ -1,11 +1,11 @@
 var integration =
 {
 	name: 'viagogo',
-	getDayElement: function(date) {
+	getDayElements: function(date) {
 		var timezonedDate = getTimeZonedTime(date, 'Europe/London');
-		return document.querySelector('.js-day.day[id=\''+timezonedDate.unix()+'\']');
+		return document.querySelectorAll('.js-day.day[id=\''+timezonedDate.unix()+'\']');
 	},
-	getShowElementsinDayElement: function(dayElement) {
+	getShowElementsInDayElement: function(dayElement) {
 		return dayElement.querySelectorAll('.event.js-event');
 	},
 	getTimeAndPriceForShowElement: function(showElement) {

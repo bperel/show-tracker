@@ -32,12 +32,11 @@ function scrape(integrationName) {
 				console.log("[Integration][" + integration.name + "] Scraping state : " + integration.getNextDaysPaginationMarker());
 
 				Array.prototype.forEach.call(dates, function (date) {
-					var dayElement = integration.getDayElement(date);
-					if (dayElement) {
+					Array.prototype.forEach.call(integration.getDayElements(date), function (dayElement) {
 						console.log("[Integration][" + integration.name + "] Day found : " + date);
 						timesAndPricesForIntegration.push(date);
 
-						var showElementsInDayElement = integration.getShowElementsinDayElement(dayElement);
+						var showElementsInDayElement = integration.getShowElementsInDayElement(dayElement);
 						if (showElementsInDayElement.length) {
 
 							Array.prototype.forEach.call(showElementsInDayElement, function (showElement) {
@@ -47,7 +46,7 @@ function scrape(integrationName) {
 								}
 							});
 						}
-					}
+					});
 				});
 				return timesAndPricesForIntegration;
 			}, nonProcessedDatesForIntegration, timesAndPrices[integrationName]
