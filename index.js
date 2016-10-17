@@ -1,9 +1,4 @@
 var casper = require('casper').create({
-	clientScripts:  [
-		'integrations/general.js',
-		'node_modules/moment/moment.js',
-		'node_modules/moment-timezone-with-data-2010-2020/index.js'
-	],
 	pageSettings: {
 		userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)'
 	},
@@ -15,11 +10,18 @@ var casper = require('casper').create({
 
 var dates = casper.cli.options.dates.split(',');
 
-var sites = [{
-	name: 'viagogo',
-	type: 'scraping',
-	url: 'http://www.viagogo.co.uk/Theatre-Tickets/Theatre/Harry-Potter-and-the-Cursed-Child-Tickets'
-}];
+var sites = [
+	{
+		name: 'viagogo',
+		type: 'scraping',
+		url: 'http://www.viagogo.co.uk/Theatre-Tickets/Theatre/Harry-Potter-and-the-Cursed-Child-Tickets'
+	},
+	{
+		name: 'getmein',
+		type: 'scraping',
+		url: 'http://www.getmein.com/play/harry-potter-and-the-cursed-child-tickets.html'
+	}
+];
 
 var nonProcessedDatesForIntegration;
 var timesAndPrices;
@@ -27,6 +29,7 @@ var pagesProcessedPerIntegration = {};
 
 function scrape(integrationName) {
 	casper.then(function () {
+		console.log("[Integration][" + integrationName + "] Scraping page " + pagesProcessedPerIntegration[integrationName]);
 		timesAndPrices[integrationName] =
 			this.evaluate(function (dates, timesAndPricesForIntegration) {
 				console.log("[Integration][" + integration.name + "] Scraping state : " + integration.getNextDaysPaginationMarker());
@@ -38,7 +41,6 @@ function scrape(integrationName) {
 
 						var showElementsInDayElement = integration.getShowElementsInDayElement(dayElement);
 						if (showElementsInDayElement.length) {
-
 							Array.prototype.forEach.call(showElementsInDayElement, function (showElement) {
 								var timeAndPrice = integration.getTimeAndPriceForShowElement(showElement);
 								if (timeAndPrice != null) {
@@ -78,50 +80,74 @@ function scrape(integrationName) {
 			if (pagesProcessedPerIntegration[integrationName] >= maxPaginationChange) {
 				console.log("[Integration][" + integrationName + "] Reached max pagination change : " + pagesProcessedPerIntegration[integrationName] + ", aborting.");
 			}
+			else {
+				console.log("[Integration][" + integrationName + "] Fetching next show dates...");
+				var stateBeforeNextDaysClick = this.evaluate(function () {
+					var stateBeforeNextDaysClick = integration.getNextDaysPaginationMarker();
+					integration.getElementForNextDays().click();
 
-			console.log("[Integration][" + integrationName + "] Fetching next show dates...");
-			var stateBeforeNextDaysClick = this.evaluate(function () {
-				var stateBeforeNextDaysClick = integration.getNextDaysPaginationMarker();
-				integration.getElementForNextDays().click();
+					return stateBeforeNextDaysClick;
+				});
 
-				return stateBeforeNextDaysClick;
-			});
-
-			casper.waitFor(function () {
-				return this.evaluate(function (stateBeforeNextDaysClick) {
-					return integration.hasChangedPagination(stateBeforeNextDaysClick);
-				}, stateBeforeNextDaysClick);
-			}, function then() {
-				scrape(integrationName);
-			});
+				casper.waitFor(function () {
+					return this.evaluate(function (stateBeforeNextDaysClick) {
+						return integration.hasChangedPagination(stateBeforeNextDaysClick);
+					}, stateBeforeNextDaysClick);
+				}, function then() {
+					scrape(integrationName);
+				});
+				return;
+			}
 		}
+		sites.splice(0, 1);
+		site = sites[0];
+		grabNextSite();
 	});
 }
 
-for (i in sites) {
-	var site = sites[i];
+var initSite;
+
+function grabNextSite() {
+	initSite = false;
 	timesAndPrices = {};
 
-	casper.on('remote.message', function(message) {
-		console.log(message);
-	});casper.on( 'page.error', function (msg, trace) {
-		this.echo( 'Error: ' + msg + JSON.stringify(trace), 'ERROR' );
-	});
+	casper.on("page.initialized", function(){
 
-	casper.start(site.url, function() {
 		timesAndPrices[site.name] = [];
 		nonProcessedDatesForIntegration = dates;
+		this.page.injectJs('node_modules/moment/moment.js');
+		this.page.injectJs('node_modules/moment-timezone-with-data-2010-2020/index.js');
+		this.page.injectJs('integrations/general.js');
 		this.page.injectJs('integrations/'+site.name+'.js');
+	});
 
-		switch(site.type) {
-			case 'scraping':
-				pagesProcessedPerIntegration[site.name] = 0;
-				scrape(site.name);
-			break;
+	casper.on('load.finished', function() {
+		if (!initSite) {
+			initSite = true;
+			console.log("[Integration][" + site.name + "] Starting");
+			switch(site.type) {
+				case 'scraping':
+					pagesProcessedPerIntegration[site.name] = 0;
+					scrape(site.name);
+					break;
+			}
 		}
 	});
+
+	casper.start(site.url);
 
 	casper.run(function() {
 		casper.done();
 	});
 }
+
+casper.on('remote.message', function(message) {
+	console.log(message);
+});
+
+casper.on( 'page.error', function (msg, trace) {
+	this.echo( 'Error: ' + msg + JSON.stringify(trace), 'ERROR' );
+});
+
+var site = sites[0];
+grabNextSite();
