@@ -23,6 +23,7 @@ var sites = [{
 
 var nonProcessedDatesForIntegration;
 var timesAndPrices;
+var pagesProcessedPerIntegration = {};
 
 function scrape(integrationName) {
 	casper.then(function () {
@@ -51,17 +52,34 @@ function scrape(integrationName) {
 				return timesAndPricesForIntegration;
 			}, nonProcessedDatesForIntegration, timesAndPrices[integrationName]
 		);
+		var maxDayDisplayed = this.evaluate(function () {
+			return integration.getMaxDay().format('YYYY-MM-DD');
+		});
+
 		for (var j = nonProcessedDatesForIntegration.length - 1; j >= 0; j--) {
 			var date = nonProcessedDatesForIntegration[j];
-			if (timesAndPrices[integrationName].indexOf(date) !== -1) {
-				nonProcessedDatesForIntegration.splice(j, 1);
+			if (timesAndPrices[integrationName].indexOf(date) === -1) {
+				if (maxDayDisplayed > date) {
+					console.log("[Integration][" + integrationName + "] Day not found in the calendar : " + date + ", skipping date.");
+				}
+				else {
+					console.log("[Integration][" + integrationName + "] Day not found : " + date + ", will fetch next show dates");
+					continue;
+				}
 			}
-			else {
-				console.log("[Integration][" + integrationName + "] Day not found : " + date + ", will fetch next show dates");
-			}
+			nonProcessedDatesForIntegration.splice(j, 1); // Day processed or not found in calendar at all
 		}
 
 		if (nonProcessedDatesForIntegration.length) {
+			pagesProcessedPerIntegration[integrationName]++;
+			var maxPaginationChange = this.evaluate(function() {
+				return integration.getMaxPaginationChange();
+			});
+
+			if (pagesProcessedPerIntegration[integrationName] >= maxPaginationChange) {
+				console.log("[Integration][" + integrationName + "] Reached max pagination change : " + pagesProcessedPerIntegration[integrationName] + ", aborting.");
+			}
+
 			console.log("[Integration][" + integrationName + "] Fetching next show dates...");
 			var stateBeforeNextDaysClick = this.evaluate(function () {
 				var stateBeforeNextDaysClick = integration.getNextDaysPaginationMarker();
@@ -98,9 +116,8 @@ for (i in sites) {
 
 		switch(site.type) {
 			case 'scraping':
+				pagesProcessedPerIntegration[site.name] = 0;
 				scrape(site.name);
-				console.log(JSON.stringify(timesAndPrices));
-
 			break;
 		}
 	});
