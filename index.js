@@ -131,7 +131,10 @@ function grabNextSite() {
 	casper.start(site.url);
 
 	casper.run(function() {
-		casper.done();
+		setTimeout(function() {
+			casper.done();
+			phantom.exit();
+		});
 	});
 }
 
