@@ -7,8 +7,6 @@ var integration =
 		var monthAndYear = timezonedDate.format('MMM YYYY');
 		var allDays = document.querySelectorAll('.date.table-cell');
 
-		console.log(allDays.length);
-
 		return Array.prototype.filter.call(allDays, function (dayElement) {
 			return dayElement.querySelector('.day') === day
 			 && dayElement.querySelector('.month-year.month') === monthAndYear;

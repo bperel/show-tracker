@@ -1,58 +1,54 @@
-var casper = require('casper').create({
-	pageSettings: {
-		userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)'
-	},
-	viewportSize: {
-		width: 1600,
-		height: 1600
-	}
-});
-
-var dates = casper.cli.options.dates.split(',');
-
-var sites = [
-	{
-		name: 'viagogo',
-		type: 'scraping',
-		url: 'http://www.viagogo.co.uk/Theatre-Tickets/Theatre/Harry-Potter-and-the-Cursed-Child-Tickets'
-	},
-	{
-		name: 'getmein',
-		type: 'scraping',
-		url: 'http://www.getmein.com/play/harry-potter-and-the-cursed-child-tickets.html'
-	}
-];
-
-var nonProcessedDatesForIntegration;
-var timesAndPrices;
-var pagesProcessedPerIntegration = {};
+function buildSites() {
+	Array.prototype.forEach.call(urls, function (url) {
+		var integrationAndPage = url.split(':');
+		if (integrationAndPage.length !== 2) {
+			console.error('Invalid URL ' + url + ', use format integration_site:page');
+		}
+		else {
+			var sitesForUrl = Array.prototype.filter.call(sitesConfig, function (site) {
+				return site.name === integrationAndPage[0];
+			});
+			if (sitesForUrl) {
+				var siteForUrl = sitesForUrl[0];
+				sites.push({
+					name: siteForUrl.name,
+					type: siteForUrl.type,
+					url: siteForUrl.urlPrefix + integrationAndPage[1]
+				});
+			}
+			else {
+				console.error('Integration not found for name ' + integrationAndPage[0]);
+			}
+		}
+	});
+}
 
 function scrape(integrationName) {
 	casper.then(function () {
 		console.log("[Integration][" + integrationName + "] Scraping page " + pagesProcessedPerIntegration[integrationName]);
 		timesAndPrices[integrationName] =
 			this.evaluate(function (dates, timesAndPricesForIntegration) {
-				console.log("[Integration][" + integration.name + "] Scraping state : " + integration.getNextDaysPaginationMarker());
+					console.log("[Integration][" + integration.name + "] Scraping state : " + integration.getNextDaysPaginationMarker());
 
-				Array.prototype.forEach.call(dates, function (date) {
-					Array.prototype.forEach.call(integration.getDayElements(date), function (dayElement) {
-						console.log("[Integration][" + integration.name + "] Day found : " + date);
-						timesAndPricesForIntegration.push(date);
+					Array.prototype.forEach.call(dates, function (date) {
+						Array.prototype.forEach.call(integration.getDayElements(date), function (dayElement) {
+							console.log("[Integration][" + integration.name + "] Day found : " + date);
+							timesAndPricesForIntegration.push(date);
 
-						var showElementsInDayElement = integration.getShowElementsInDayElement(dayElement);
-						if (showElementsInDayElement.length) {
-							Array.prototype.forEach.call(showElementsInDayElement, function (showElement) {
-								var timeAndPrice = integration.getTimeAndPriceForShowElement(showElement);
-								if (timeAndPrice != null) {
-									console.log("[Integration][" + integration.name + "][Show]" + date + " " + timeAndPrice.time.trim() + " : " + timeAndPrice.price.trim());
-								}
-							});
-						}
+							var showElementsInDayElement = integration.getShowElementsInDayElement(dayElement);
+							if (showElementsInDayElement.length) {
+								Array.prototype.forEach.call(showElementsInDayElement, function (showElement) {
+									var timeAndPrice = integration.getTimeAndPriceForShowElement(showElement);
+									if (timeAndPrice != null) {
+										console.log("[Integration][" + integration.name + "][Show]" + date + " " + timeAndPrice.time.trim() + " : " + timeAndPrice.price.trim());
+									}
+								});
+							}
+						});
 					});
-				});
-				return timesAndPricesForIntegration;
-			}, nonProcessedDatesForIntegration, timesAndPrices[integrationName]
-		);
+					return timesAndPricesForIntegration;
+				}, nonProcessedDatesForIntegration, timesAndPrices[integrationName]
+			);
 		var maxDayDisplayed = this.evaluate(function () {
 			return integration.getMaxDay().format('YYYY-MM-DD');
 		});
@@ -105,16 +101,14 @@ function scrape(integrationName) {
 	});
 }
 
-var initSite;
-
 function grabNextSite() {
-	initSite = false;
+	siteInitDone = false;
 	timesAndPrices = {};
 
 	casper.on("page.initialized", function(){
 
 		timesAndPrices[site.name] = [];
-		nonProcessedDatesForIntegration = dates;
+		nonProcessedDatesForIntegration = JSON.parse(JSON.stringify(dates));
 		this.page.injectJs('node_modules/moment/moment.js');
 		this.page.injectJs('node_modules/moment-timezone-with-data-2010-2020/index.js');
 		this.page.injectJs('integrations/general.js');
@@ -122,8 +116,8 @@ function grabNextSite() {
 	});
 
 	casper.on('load.finished', function() {
-		if (!initSite) {
-			initSite = true;
+		if (!siteInitDone) {
+			siteInitDone = true;
 			console.log("[Integration][" + site.name + "] Starting");
 			switch(site.type) {
 				case 'scraping':
@@ -141,6 +135,16 @@ function grabNextSite() {
 	});
 }
 
+var casper = require('casper').create({
+	pageSettings: {
+		userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X)'
+	},
+	viewportSize: {
+		width: 1600,
+		height: 1600
+	}
+});
+
 casper.on('remote.message', function(message) {
 	console.log(message);
 });
@@ -149,5 +153,29 @@ casper.on( 'page.error', function (msg, trace) {
 	this.echo( 'Error: ' + msg + JSON.stringify(trace), 'ERROR' );
 });
 
+var dates = casper.cli.options.dates.split(',');
+var urls = casper.cli.options.sites.split(',');
+
+var sitesConfig = [
+	{
+		name: 'viagogo',
+		type: 'scraping',
+		urlPrefix: 'http://www.viagogo.co.uk/Theatre-Tickets/Theatre/'
+	},
+	{
+		name: 'getmein',
+		type: 'scraping',
+		urlPrefix: 'http://www.getmein.com/play/'
+	}
+];
+
+var sites = [];
+buildSites();
+
+var nonProcessedDatesForIntegration;
+var timesAndPrices;
+var pagesProcessedPerIntegration = {};
+
 var site = sites[0];
+var siteInitDone = false;
 grabNextSite();
