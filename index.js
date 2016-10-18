@@ -80,7 +80,7 @@ function scrape(integrationName) {
 				console.log("[Integration][" + integrationName + "] Fetching next show dates...");
 				var stateBeforeNextDaysClick = this.evaluate(function () {
 					var stateBeforeNextDaysClick = integration.getNextDaysPaginationMarker();
-					integration.getElementForNextDays().click();
+					click(integration.getElementForNextDays());
 
 					return stateBeforeNextDaysClick;
 				});
