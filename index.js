@@ -1,23 +1,37 @@
+function encodeGetParameters(obj) {
+	return Object.keys(obj).map(function (key) {
+		return key + '=' + encodeURIComponent(obj[key]);
+	}).join('&');
+}
+
 function buildSites() {
 	Array.prototype.forEach.call(urls, function (url) {
-		var integrationAndPage = url.split(':');
-		if (integrationAndPage.length !== 2) {
+		var integrationAndConfig = url.split(':');
+		if (integrationAndConfig.length !== 2) {
 			console.error('Invalid URL ' + url + ', use format integration_site:page');
 		}
 		else {
 			var sitesForUrl = Array.prototype.filter.call(sitesConfig, function (site) {
-				return site.name === integrationAndPage[0];
+				return site.name === integrationAndConfig[0];
 			});
 			if (sitesForUrl) {
 				var siteForUrl = sitesForUrl[0];
-				sites.push({
+				var site = {
 					name: siteForUrl.name,
-					type: siteForUrl.type,
-					url: siteForUrl.urlPrefix + integrationAndPage[1]
-				});
+					type: siteForUrl.type
+				};
+				switch(siteForUrl.type) {
+					case 'scraping':
+						site.url = siteForUrl.urlPrefix + integrationAndConfig[1];
+					break;
+					case 'api':
+						site.eventName = integrationAndConfig[1];
+					break;
+				}
+				sites.push(site);
 			}
 			else {
-				console.error('Integration not found for name ' + integrationAndPage[0]);
+				console.error('Integration not found for name ' + integrationAndConfig[0]);
 			}
 		}
 	});
@@ -101,34 +115,65 @@ function scrape(integrationName) {
 	});
 }
 
+function onLoad(response) {
+	if (!siteInitDone) {
+		siteInitDone = true;
+		console.log("[Integration][" + site.name + "] Starting");
+		switch(site.type) {
+			case 'scraping':
+				pagesProcessedPerIntegration[site.name] = 0;
+				scrape(site.name);
+				break;
+			case 'api':
+				if(response.status == 200){
+					var jsonSource = this.page.plainText;
+					console.log(JSON.stringify(jsonSource));
+				}
+				break;
+		}
+	}
+}
+
 function grabNextSite() {
 	siteInitDone = false;
 	timesAndPrices = {};
 
-	casper.on("page.initialized", function(){
-
+	casper.on("page.initialized", function() {
 		timesAndPrices[site.name] = [];
 		nonProcessedDatesForIntegration = JSON.parse(JSON.stringify(dates));
-		this.page.injectJs('node_modules/moment/moment.js');
-		this.page.injectJs('node_modules/moment-timezone-with-data-2010-2020/index.js');
-		this.page.injectJs('integrations/general.js');
-		this.page.injectJs('integrations/'+site.name+'.js');
-	});
 
-	casper.on('load.finished', function() {
-		if (!siteInitDone) {
-			siteInitDone = true;
-			console.log("[Integration][" + site.name + "] Starting");
-			switch(site.type) {
-				case 'scraping':
-					pagesProcessedPerIntegration[site.name] = 0;
-					scrape(site.name);
-					break;
-			}
+		switch(site.type) {
+			case 'scraping':
+				this.page.injectJs('node_modules/moment/moment.js');
+				this.page.injectJs('node_modules/moment-timezone-with-data-2010-2020/index.js');
+				this.page.injectJs('integrations/general.js');
+				this.page.injectJs('integrations/'+site.name+'.js');
+			break;
 		}
 	});
 
-	casper.start(site.url);
+	switch(site.type) {
+		case 'scrape':
+			casper.on('load.finished', onLoad);
+			casper.start(site.url);
+		break;
+		case 'api':
+			var integration = require('./integrations/' + site.name + '.js');
+			var parameters = integration.getParameters(dates, site.eventName);
+			casper.start();
+			casper.open('https://api.stubhub.com/search/catalog/events/v3?' + encodeGetParameters(parameters),{
+				method: 'get',
+				headers: {
+					'Accept': 'application/json',
+					'Accept-Encoding': 'application/json',
+					'Cache-Control': 'no-cache',
+					'Authorization': 'Bearer ' + config.integrations.stubhub.bearer
+				}
+			});
+
+			casper.then(onLoad);
+		break;
+	}
 
 	casper.run(function() {
 		setTimeout(function() {
@@ -147,6 +192,7 @@ var casper = require('casper').create({
 		height: 1600
 	}
 });
+var config = require('config.json');
 
 casper.on('remote.message', function(message) {
 	console.log(message);
@@ -169,6 +215,11 @@ var sitesConfig = [
 		name: 'getmein',
 		type: 'scraping',
 		urlPrefix: 'http://www.getmein.com/play/'
+	},
+	{
+		name: 'stubhub',
+		type: 'api',
+		urlPrefix: 'https://api.stubhub.com/'
 	}
 ];
 

@@ -1,0 +1,7 @@
+{
+    "integrations": {
+        "stubhub": {
+            "bearer": "MY_BEARER"
+        }
+    }
+}
