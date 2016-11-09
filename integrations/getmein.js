@@ -14,10 +14,10 @@ var integration =
 			return dayElement.parentElement();
 		});
 	},
-	getShowElementsInDayElement: function(dayElement) {
-		return dayElement.querySelectorAll('.month-year:not(.month)');
+	getShowElementsInDayElement: function(dayElement, callback) {
+		callback(dayElement.querySelectorAll('.month-year:not(.month)'));
 	},
-	getTimeAndPriceForShowElement: function(showElement) {
+	getTimeAndPriceForShowElement: function(dayElement, showElement) {
 		return {
 			time: showElement.textContent,
 			price: 1

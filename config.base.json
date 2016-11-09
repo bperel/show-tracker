@@ -1,6 +1,7 @@
 {
     "integrations": {
         "stubhub": {
+		  	"application_token": "MY_APPLICATION_TOKEN",
             "bearer": "MY_BEARER"
         }
     }

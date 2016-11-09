@@ -43,24 +43,8 @@ function scrape(integrationName) {
 		timesAndPrices[integrationName] =
 			this.evaluate(function (dates, timesAndPricesForIntegration) {
 					console.log("[Integration][" + integration.name + "] Scraping state : " + integration.getNextDaysPaginationMarker());
+					return findTimesAndPricesForIntegration(dates, timesAndPricesForIntegration);
 
-					Array.prototype.forEach.call(dates, function (date) {
-						Array.prototype.forEach.call(integration.getDayElements(date), function (dayElement) {
-							console.log("[Integration][" + integration.name + "] Day found : " + date);
-							timesAndPricesForIntegration.push(date);
-
-							var showElementsInDayElement = integration.getShowElementsInDayElement(dayElement);
-							if (showElementsInDayElement.length) {
-								Array.prototype.forEach.call(showElementsInDayElement, function (showElement) {
-									var timeAndPrice = integration.getTimeAndPriceForShowElement(showElement);
-									if (timeAndPrice != null) {
-										console.log("[Integration][" + integration.name + "][Show]" + date + " " + timeAndPrice.time.trim() + " : " + timeAndPrice.price.trim());
-									}
-								});
-							}
-						});
-					});
-					return timesAndPricesForIntegration;
 				}, nonProcessedDatesForIntegration, timesAndPrices[integrationName]
 			);
 		var maxDayDisplayed = this.evaluate(function () {
@@ -93,42 +77,69 @@ function scrape(integrationName) {
 			else {
 				console.log("[Integration][" + integrationName + "] Fetching next show dates...");
 				var stateBeforeNextDaysClick = this.evaluate(function () {
-					var stateBeforeNextDaysClick = integration.getNextDaysPaginationMarker();
-					click(integration.getElementForNextDays());
-
-					return stateBeforeNextDaysClick;
+					return integration.getNextDaysPaginationMarker();
 				});
 
 				casper.waitFor(function () {
+					casper.captureSelector('yoursitelist.png', '.head');
 					return this.evaluate(function (stateBeforeNextDaysClick) {
 						return integration.hasChangedPagination(stateBeforeNextDaysClick);
 					}, stateBeforeNextDaysClick);
-				}, function then() {
+				}, function() {
 					scrape(integrationName);
+				}, function() {
+					console.log("[Integration][" + integrationName + "] Pagination change timeout, skipping integration.");
+					sites.splice(0, 1);
+					grabNextSite();
 				});
 				return;
 			}
 		}
 		sites.splice(0, 1);
-		site = sites[0];
 		grabNextSite();
 	});
 }
 
-function onLoad(response) {
+function findTimesAndPricesForIntegrationNextDate(integrationName, currentDateIndex) {
+	var parameters = integration.getParameters(dates[currentDateIndex], currentSite.eventName);
+	casper.open(integration.getRestEventListCallEndpoint(parameters), integration.getRestCallOptions());
+	casper.then(function(response) {
+		if(response.status == 200) {
+			jsonContent = JSON.parse(this.page.plainText);
+			findTimesAndPricesForIntegration([nonProcessedDatesForIntegration[currentDateIndex]], timesAndPrices[integrationName], function() {
+				if (nonProcessedDatesForIntegration[currentDateIndex + 1]) {
+					findTimesAndPricesForIntegrationNextDate(integrationName, currentDateIndex + 1);
+				}
+				else {
+					sites.splice(0, 1);
+					grabNextSite();
+				}
+			});
+		}
+		else {
+			console.log("[Integration][" + integrationName + "] Error: HTTP error " + response.status + ", skipping integration");
+			sites.splice(0, 1);
+			grabNextSite();
+		}
+	});
+}
+
+function useApi(integrationName) {
+	console.log("[Integration][" + integrationName + "] Using API");
+	findTimesAndPricesForIntegrationNextDate(integrationName, 0);
+}
+
+function onLoad() {
 	if (!siteInitDone) {
 		siteInitDone = true;
-		console.log("[Integration][" + site.name + "] Starting");
-		switch(site.type) {
+		console.log("[Integration][" + currentSite.name + "] Starting");
+		switch(currentSite.type) {
 			case 'scraping':
-				pagesProcessedPerIntegration[site.name] = 0;
-				scrape(site.name);
+				pagesProcessedPerIntegration[currentSite.name] = 0;
+				scrape(currentSite.name);
 				break;
 			case 'api':
-				if(response.status == 200){
-					var jsonSource = this.page.plainText;
-					console.log(JSON.stringify(jsonSource));
-				}
+				useApi(currentSite.name);
 				break;
 		}
 	}
@@ -136,42 +147,34 @@ function onLoad(response) {
 
 function grabNextSite() {
 	siteInitDone = false;
+	currentSite = sites[0];
+
 	timesAndPrices = {};
 
 	casper.on("page.initialized", function() {
-		timesAndPrices[site.name] = [];
+		timesAndPrices[currentSite.name] = [];
 		nonProcessedDatesForIntegration = JSON.parse(JSON.stringify(dates));
 
-		switch(site.type) {
+		switch(currentSite.type) {
 			case 'scraping':
 				this.page.injectJs('node_modules/moment/moment.js');
 				this.page.injectJs('node_modules/moment-timezone-with-data-2010-2020/index.js');
 				this.page.injectJs('integrations/general.js');
-				this.page.injectJs('integrations/'+site.name+'.js');
+				this.page.injectJs('integrations/'+currentSite.name+'.js');
 			break;
 		}
 	});
 
-	switch(site.type) {
-		case 'scrape':
+	switch(currentSite.type) {
+		case 'scraping':
 			casper.on('load.finished', onLoad);
-			casper.start(site.url);
+			casper.start(currentSite.url);
 		break;
 		case 'api':
-			var integration = require('./integrations/' + site.name + '.js');
-			var parameters = integration.getParameters(dates, site.eventName);
+			require('./integrations/general.js');
+			integration = require('./integrations/' + currentSite.name + '.js');
 			casper.start();
-			casper.open('https://api.stubhub.com/search/catalog/events/v3?' + encodeGetParameters(parameters),{
-				method: 'get',
-				headers: {
-					'Accept': 'application/json',
-					'Accept-Encoding': 'application/json',
-					'Cache-Control': 'no-cache',
-					'Authorization': 'Bearer ' + config.integrations.stubhub.bearer
-				}
-			});
-
-			casper.then(onLoad);
+			onLoad();
 		break;
 	}
 
@@ -193,6 +196,7 @@ var casper = require('casper').create({
 	}
 });
 var config = require('config.json');
+var findTimesAndPricesForIntegration = require('./integrations/general.js').findTimesAndPricesForIntegration;
 
 casper.on('remote.message', function(message) {
 	console.log(message);
@@ -228,8 +232,11 @@ buildSites();
 
 var nonProcessedDatesForIntegration;
 var timesAndPrices;
-var pagesProcessedPerIntegration = {};
+var pagesProcessedPerIntegration = {}; // Scrape only
+var jsonContent = null; // API only
+var integration; // Local, API only
+var moment;
 
-var site = sites[0];
+var currentSite;
 var siteInitDone = false;
 grabNextSite();

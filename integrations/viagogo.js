@@ -5,10 +5,10 @@ var integration =
 		var timezonedDate = getTimeZonedTime(date, 'Europe/London');
 		return document.querySelectorAll('.js-day.day[id=\''+timezonedDate.unix()+'\']');
 	},
-	getShowElementsInDayElement: function(dayElement) {
-		return dayElement.querySelectorAll('.event.js-event');
+	getShowElementsInDayElement: function(dayElement, callback) {
+		callback(dayElement.querySelectorAll('.event.js-event'));
 	},
-	getTimeAndPriceForShowElement: function(showElement) {
+	getTimeAndPriceForShowElement: function(dayElement, showElement) {
 		var time = showElement.querySelector('.time');
 		if (!time.nextElementSibling) {
 			return null;
@@ -19,10 +19,10 @@ var integration =
 		}
 	},
 	getElementForNextDays: function() {
-		return document.querySelector('.js-next-month');
+		return '.js-next-month';
 	},
 	getNextDaysPaginationMarker: function() {
-		return document.querySelector('.js-month').textContent;
+		return document.querySelector('.js-month') && document.querySelector('.js-month').textContent;
 	},
 	hasChangedPagination: function(stateBefore) {
 		var currentMonth = document.querySelector('.js-month').textContent;
